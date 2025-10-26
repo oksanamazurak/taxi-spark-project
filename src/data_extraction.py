@@ -1,12 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, TimestampType
 
-def load_taxi_data(file_path: str):
-
-    spark = SparkSession.builder \
-        .appName("NYC Taxi Data Extraction") \
-        .getOrCreate()
-
+def load_taxi_data(spark: SparkSession, file_path: str):
     schema = StructType([
         StructField("vendor_id", StringType(), True),
         StructField("tpep_pickup_datetime", TimestampType(), True),
@@ -37,5 +32,4 @@ def load_taxi_data(file_path: str):
 
     print("Дані успішно завантажено!")
     df.show(5)
-
     return df
