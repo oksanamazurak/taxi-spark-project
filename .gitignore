@@ -4,4 +4,7 @@ env/
 venv/
 .idea/
 *.log
-yellow_tripdata_2016-03.csv
+data/*.csv
+data/*.parquet
+data/*.json
+output/

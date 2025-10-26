@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  spark-master:
+    image: apache/spark:3.5.2
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    command: ["/bin/bash", "-c", "/opt/spark/bin/spark-class org.apache.spark.deploy.master.Master"]
+
+  spark-worker:
+    image: apache/spark:3.5.2
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+    command: ["/bin/bash", "-c", "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"]
+
+  spark-app:
+    build:
+      context: .
+    container_name: spark-app
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+    depends_on:
+      - spark-master
+      - spark-worker
+    volumes:
+      - ./data:/app/data
+      - .:/app
+    command: ["python3", "main.py"]
