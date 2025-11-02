@@ -20,6 +20,12 @@ def filter_questions(df):
               "fare_amount", "tip_amount", "total_amount") \
       .limit(10).show(truncate=False)
 
+    print("\n--- Filter запит 4: поїздки з total_amount між 20 і 50 та без чайових (tip_amount = 0) ---")
+    df.filter((col("total_amount").between(20, 50)) & (col("tip_amount") == 0)) \
+        .select("tpep_pickup_datetime", "vendor_id", "trip_distance", "tip_amount", "total_amount", "payment_type") \
+        .limit(10).show(truncate=False)
+
+
 
 def groupby_questions(df):
     print("\n--- GroupBy запит 1: середня total і tip по vendor_id")
@@ -33,6 +39,13 @@ def groupby_questions(df):
       .agg(avg("total_amount").alias("avg_total")) \
       .orderBy("passenger_count") \
       .show(truncate=False)
+
+    print("\n--- GroupBy запит 3: середня total_amount по payment_type (>5 миль) ---")
+    df.filter(col("trip_distance") > 5) \
+        .groupBy("payment_type") \
+        .agg(avg("total_amount").alias("avg_total")) \
+        .orderBy("payment_type") \
+        .show(truncate=False)
 
 
 def join_questions_safe(df, vendor_lookup, payment_lookup):
@@ -64,6 +77,19 @@ def join_questions_safe(df, vendor_lookup, payment_lookup):
                                 "vendor_id", "fare_amount", "tip_amount", "total_amount") \
                         .show(truncate=False)
 
+    print("\n--- Join запит 3: поїздки у вихідні з назвами vendor ---")
+    df_weekend = df.filter(dayofweek(col("tpep_pickup_datetime")).isin([1, 7]))
+    df_weekend_named = df_weekend.join(broadcast(vendor_lookup), on="vendor_id", how="left")
+    df_weekend_named.select("vendor_name", "tpep_pickup_datetime", "trip_distance", "total_amount") \
+        .limit(10).show(truncate=False)
+
+    print("\n--- Join запит 4: середня сума чайових по payment_name ---")
+    df_joined = df.join(broadcast(payment_lookup), on="payment_type", how="left")
+    df_joined.groupBy("payment_name") \
+        .agg(avg("tip_amount").alias("avg_tip")) \
+        .orderBy("avg_tip", ascending=False) \
+        .show(truncate=False)
+
 
 def join_and_window_questions_safe(df, vendor_lookup, payment_lookup):
     # --- Window Question 1: Топ-3 найдовші поїздки по кожному vendor ---
@@ -90,3 +116,20 @@ def join_and_window_questions_safe(df, vendor_lookup, payment_lookup):
                        "fare_amount", "tip_amount", "total_amount", "rank_total") \
                 .orderBy("day", "rank_total") \
                 .limit(30).show(truncate=False)
+
+    print("\n--- Window запит 3: топ-3 найдовші поїздки (>20 total) ---")
+    window_vendor = Window.partitionBy("vendor_id").orderBy(col("trip_distance").desc())
+    df.filter(col("total_amount") > 20) \
+        .withColumn("rank_trip", row_number().over(window_vendor)) \
+        .filter(col("rank_trip") <= 3) \
+        .select("vendor_id", "tpep_pickup_datetime", "trip_distance", "total_amount", "rank_trip") \
+        .orderBy("vendor_id", "rank_trip") \
+        .show(truncate=False)
+
+    print("\n--- Window запит 4: топ-3 поїздки по кожному payment_type ---")
+    window_payment = Window.partitionBy("payment_type").orderBy(col("total_amount").desc())
+    df.withColumn("rank_total", rank().over(window_payment)) \
+        .filter(col("rank_total") <= 3) \
+        .select("payment_type", "tpep_pickup_datetime", "trip_distance", "total_amount", "rank_total") \
+        .orderBy("payment_type", "rank_total") \
+        .show(truncate=False)
