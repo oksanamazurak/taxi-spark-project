@@ -71,6 +71,60 @@ docker-compose down
 docker-compose down -v
 ```
 
+## Опис датасету
+
+**Джерело:** [NYC Yellow Taxi Trip Data (Kaggle)](https://www.kaggle.com/datasets/elemento/nyc-yellow-taxi-trip-data/data)
+
+**Період:** Січень 2015  
+**Кількість записів:** 12,748,986  
+**Кількість колонок:** 19
+
+### Структура даних
+
+| Поле | Тип даних | Nullable | Опис |
+|------|-----------|----------|------|
+| `vendor_id` | String | ✓ | Ідентифікатор постачальника послуг таксі (1 = Creative Mobile Technologies, 2 = VeriFone Inc.) |
+| `tpep_pickup_datetime` | Timestamp | ✓ | Дата та час початку поїздки |
+| `tpep_dropoff_datetime` | Timestamp | ✓ | Дата та час завершення поїздки |
+| `passenger_count` | Integer | ✓ | Кількість пасажирів у транспортному засобі |
+| `trip_distance` | Double | ✓ | Відстань поїздки в милях |
+| `pickup_longitude` | Double | ✓ | Довгота місця посадки пасажира |
+| `pickup_latitude` | Double | ✓ | Широта місця посадки пасажира |
+| `rate_code` | Integer | ✓ | Тарифний код (1 = Standard rate, 2 = JFK, 3 = Newark, 4 = Nassau/Westchester, 5 = Negotiated fare, 6 = Group ride) |
+| `store_and_fwd_flag` | String | ✓ | Прапорець збереження поїздки в пам'яті транспортного засобу (Y = так, N = ні) |
+| `dropoff_longitude` | Double | ✓ | Довгота місця висадки пасажира |
+| `dropoff_latitude` | Double | ✓ | Широта місця висадки пасажира |
+| `payment_type` | String | ✓ | Спосіб оплати (1 = Credit card, 2 = Cash, 3 = No charge, 4 = Dispute, 5 = Unknown, 6 = Voided trip) |
+| `fare_amount` | Double | ✓ | Базова вартість поїздки за тарифом |
+| `extra` | Double | ✓ | Додаткові збори (нічний тариф, години пік) |
+| `mta_tax` | Double | ✓ | Податок MTA (0.50 USD) |
+| `tip_amount` | Double | ✓ | Чайові (автоматично для карткових платежів, готівкові чайові не включені) |
+| `tolls_amount` | Double | ✓ | Сума оплати за проїзд платними дорогами |
+| `improvement_surcharge` | Double | ✓ | Доплата на покращення (0.30 USD) |
+| `total_amount` | Double | ✓ | Загальна сума оплати (без готівкових чайових) |
+
+### Про nullable значення
+
+Усі поля в датасеті мають `nullable=True`, що означає можливість відсутності значень (NULL).
+
+**Чому це важливо:**
+- Реальні дані містять пропуски через технічні збої, помилки введення або неповну фіксацію інформації
+- В даному датасеті виявлено **3 пропуски** в полі `improvement_surcharge`
+- Координати можуть бути NULL, якщо GPS не зафіксував дані
+- `tip_amount` може бути NULL або 0 для готівкових платежів (система не фіксує готівкові чайові)
+
+**Рекомендації з обробки:**
+```python
+from pyspark.sql.functions import col, count, when
+
+df.select([
+    count(when(col(c).isNull(), c)).alias(c) 
+    for c in df.columns
+]).show()
+
+df_clean = df.dropna()
+```
+
 ## Аналіз та висновки
 
 ### Загальна інформація про набір даних
