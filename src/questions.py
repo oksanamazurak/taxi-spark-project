@@ -1,4 +1,4 @@
-from pyspark.sql.functions import col, dayofweek, avg, to_date, row_number, rank
+from pyspark.sql.functions import col, dayofweek, avg, to_date, row_number, rank, hour, minute, unix_timestamp, sum as spark_sum, count
 from pyspark.sql.window import Window
 from pyspark.sql.functions import broadcast
 
@@ -24,6 +24,26 @@ def filter_questions(df):
     df.filter((col("total_amount").between(20, 50)) & (col("tip_amount") == 0)) \
         .select("tpep_pickup_datetime", "vendor_id", "trip_distance", "tip_amount", "total_amount", "payment_type") \
         .limit(10).show(truncate=False)
+    
+    print("\n--- Filter запит 5: поїздки між 8:00-10:00 ранку, тривалість < 15 хвилин ---")
+    df_with_duration = df.withColumn(
+        "duration_minutes",
+        (unix_timestamp("tpep_dropoff_datetime") - unix_timestamp("tpep_pickup_datetime")) / 60
+    )
+    df_with_duration.filter(
+        (hour(col("tpep_pickup_datetime")).between(8, 9)) &
+        (col("duration_minutes") < 15) &
+        (col("duration_minutes") > 0)
+    ).select(
+        "tpep_pickup_datetime", "tpep_dropoff_datetime", "duration_minutes",
+        "vendor_id", "trip_distance", "total_amount"
+    ).limit(10).show(truncate=False)
+
+    print("\n--- Filter запит 6: відстань < 2 миль, але оплата > $20 ---")
+    df.filter((col("trip_distance") < 2) & (col("total_amount") > 20)) \
+        .select("tpep_pickup_datetime", "vendor_id", "trip_distance", "total_amount",
+                "fare_amount", "extra", "tip_amount") \
+        .limit(10).show(truncate=False)
 
 
 
@@ -45,6 +65,16 @@ def groupby_questions(df):
         .groupBy("payment_type") \
         .agg(avg("total_amount").alias("avg_total")) \
         .orderBy("payment_type") \
+        .show(truncate=False)
+    
+    print("\n--- GroupBy запит 4: кількість поїздок і загальна сума по дню тижня ---")
+    from pyspark.sql.functions import count
+    df.groupBy(dayofweek(col("tpep_pickup_datetime")).alias("day_of_week")) \
+        .agg(
+            count("*").alias("trip_count"),
+            spark_sum("total_amount").alias("total_revenue")
+        ) \
+        .orderBy("day_of_week") \
         .show(truncate=False)
 
 
@@ -88,6 +118,22 @@ def join_questions_safe(df, vendor_lookup, payment_lookup):
     df_joined.groupBy("payment_name") \
         .agg(avg("tip_amount").alias("avg_tip")) \
         .orderBy("avg_tip", ascending=False) \
+        .show(truncate=False)
+    
+    print("\n--- Join запит 5: середня оплата по районах (rate_code як proxy для зон) ---")
+    zone_lookup = df.sparkSession.createDataFrame([
+        (1, "Standard Rate Zone"),
+        (2, "JFK Airport"),
+        (3, "Newark Airport"),
+        (4, "Nassau/Westchester"),
+        (5, "Negotiated Fare Zone"),
+        (6, "Group Ride Zone")
+    ], ["rate_code", "zone_name"])
+    
+    df_with_zones = df.join(broadcast(zone_lookup), on="rate_code", how="left")
+    df_with_zones.groupBy("zone_name") \
+        .agg(avg("total_amount").alias("avg_payment")) \
+        .orderBy("avg_payment", ascending=False) \
         .show(truncate=False)
 
 
@@ -133,3 +179,20 @@ def join_and_window_questions_safe(df, vendor_lookup, payment_lookup):
         .select("payment_type", "tpep_pickup_datetime", "trip_distance", "total_amount", "rank_total") \
         .orderBy("payment_type", "rank_total") \
         .show(truncate=False)
+    
+    print("\n--- Window запит 5: кумулятивна сума заробітку по vendor_id ---")
+    window_cumulative = Window.partitionBy("vendor_id").orderBy("tpep_pickup_datetime")
+    df.withColumn("cumulative_earnings", spark_sum("total_amount").over(window_cumulative)) \
+        .select("vendor_id", "tpep_pickup_datetime", "total_amount", "cumulative_earnings") \
+        .orderBy("vendor_id", "tpep_pickup_datetime") \
+        .limit(20).show(truncate=False)
+
+    print("\n--- Window запит 6: ковзне середнє відстані (5 останніх поїздок) по vendor_id ---")
+    window_moving_avg = Window.partitionBy("vendor_id") \
+        .orderBy("tpep_pickup_datetime") \
+        .rowsBetween(-4, 0)
+    
+    df.withColumn("moving_avg_distance", avg("trip_distance").over(window_moving_avg)) \
+        .select("vendor_id", "tpep_pickup_datetime", "trip_distance", "moving_avg_distance") \
+        .orderBy("vendor_id", "tpep_pickup_datetime") \
+        .limit(20).show(truncate=False)
