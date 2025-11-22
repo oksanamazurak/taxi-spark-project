@@ -4,6 +4,8 @@ from src.transform import *
 from src.questions import *
 from pyspark.sql import Row
 import sys
+from src.linregression import train_and_evaluate_linear_regression
+from src.logregression import train_and_evaluate_logistic_regression
 
 if __name__ == "__main__":
     spark = SparkSession.builder \
@@ -11,6 +13,9 @@ if __name__ == "__main__":
         .master("spark://spark-master:7077") \
         .config("spark.executorEnv.PYSPARK_PYTHON", "/usr/bin/python3") \
         .config("spark.pyspark.python", "/usr/bin/python3") \
+        .config("spark.executor.memory", "4g") \
+        .config("spark.driver.memory", "4g") \
+        .config("spark.sql.shuffle.partitions", "100") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("INFO")
@@ -23,11 +28,11 @@ if __name__ == "__main__":
     print(f"Кількість рядків у DataFrame: {df.count()}")
     print(f"Кількість колонок: {len(df.columns)}")
 
-    # Загальна інформація
-    get_dataset_info(df)
-
-    # Аналіз пропущених значень
-    check_missing_values(df)
+    # # Загальна інформація
+    # get_dataset_info(df)
+    #
+    # # Аналіз пропущених значень
+    # check_missing_values(df)
 
     # Видаляємо пропуски у колонці 'improvement_surcharge'
     df = remove_missing_in_column(df, 'improvement_surcharge')
@@ -35,29 +40,29 @@ if __name__ == "__main__":
     # Очищення комбіноване
     df = clean_taxi_data(df)
 
-    # Далі статистика, викиди і решта аналізу
-    get_numeric_stats(df)
+    # # Далі статистика, викиди і решта аналізу
+    # get_numeric_stats(df)
 
-    # Статистика для числових стовпців
-    numeric_cols = list_numeric_columns(df)
-    print("\nЧислові колонки:", numeric_cols)
-
-    stats = compute_column_stats(df, numeric_cols)
-    print("\n--- Mean / Stddev / Count non-null для числових колонок ---")
-    for col_name, (mean_v, std_v, cnt) in stats.items():
-        print(f"{col_name}: mean={mean_v}, stddev={std_v}, non_null_count={cnt}")
-
-    # Звіт по викидам (z-score)
-    out_summary = show_outliers_summary(df, cols=list_numeric_columns(df), z_thresh=3.0)
-    print("\n--- Підсумок по викидам (z-score > 3.0) ---")
-    out_summary.show(truncate=False)
+    # # Статистика для числових стовпців
+    # numeric_cols = list_numeric_columns(df)
+    # print("\nЧислові колонки:", numeric_cols)
+    #
+    # stats = compute_column_stats(df, numeric_cols)
+    # print("\n--- Mean / Stddev / Count non-null для числових колонок ---")
+    # for col_name, (mean_v, std_v, cnt) in stats.items():
+    #     print(f"{col_name}: mean={mean_v}, stddev={std_v}, non_null_count={cnt}")
+    #
+    # # Звіт по викидам (z-score)
+    # out_summary = show_outliers_summary(df, cols=list_numeric_columns(df), z_thresh=3.0)
+    # print("\n--- Підсумок по викидам (z-score > 3.0) ---")
+    # out_summary.show(truncate=False)
 
     # --- Прапорці викидів для основних колонок ---
     cols_to_flag = [c for c in ['trip_distance', 'fare_amount'] if c in df.columns]
     if cols_to_flag:
-        df = add_outlier_flags(df, cols=cols_to_flag, z_thresh=3.0)
-        print("\nПоказати кілька рядків з прапорцями викидів:")
-        df.select(cols_to_flag + [f"{c}_is_outlier" for c in cols_to_flag]).show(10, truncate=False)
+        # df = add_outlier_flags(df, cols=cols_to_flag, z_thresh=3.0)
+        # print("\nПоказати кілька рядків з прапорцями викидів:")
+        # df.select(cols_to_flag + [f"{c}_is_outlier" for c in cols_to_flag]).show(10, truncate=False)
 
         # Видалити рядки, де хоча б одна з вибраних колонок є викидом
         before = df.count()
@@ -65,20 +70,55 @@ if __name__ == "__main__":
         after = df.count()
         print(f"\nРядків до очистки: {before}, після видалення викидів: {after}")
 
-    get_numeric_stats(df)
+    # --- Зменшення вибірки для тренування логістичної регресії ---
+    df_sample = df.sample(withReplacement=False, fraction=0.2, seed=42)
+    print(f"\nВикористовується {df_sample.count()} рядків для класифікації (20% від усіх)")
 
-    vendor_lookup = spark.createDataFrame([
-        Row(vendor_id=1, vendor_name="Creative Mobile Technologies"),
-        Row(vendor_id=2, vendor_name="VeriFone Inc")
-    ])
-    payment_lookup = spark.createDataFrame([
-        Row(payment_type=1, payment_name="Credit card"),
-        Row(payment_type=2, payment_name="Cash"),
-    ])
+    # Регресія (результати в терміналі, без збереження)
+    reg_results = train_and_evaluate_linear_regression(
+        df,
+        feature_cols=['passenger_count', 'trip_distance'],
+        categorical_cols=['vendor_id', 'payment_type'],
+        label_col='total_amount',
+        save=False
+    )
+    reg_results.show(truncate=False)
 
-    filter_questions(df)
-    groupby_questions(df)
-    join_questions_safe(df, vendor_lookup, payment_lookup)
-    join_and_window_questions_safe(df, vendor_lookup, payment_lookup)
+    # Класифікація
+    print("\nМультикласова Класифікація: Категорія Поїздки")
+    # Класи: 0 (Short), 1 (Medium), 2 (Long)
+
+    clf_results = train_and_evaluate_logistic_regression(
+        df_sample,
+        feature_cols=[
+            'passenger_count',
+            'total_amount',  # Ціна сильно корелює з відстанню
+            'tolls_amount',  # Платні дороги часто означають довгу поїздку
+            'tip_amount'
+        ],
+        categorical_cols=[
+            'vendor_id',
+            'payment_type'
+        ],
+        label_col='trip_category',  # Назва нової колонки з класами
+        save=False
+    )
+    clf_results.show(truncate=False)
+
+    # get_numeric_stats(df)
+    #
+    # vendor_lookup = spark.createDataFrame([
+    #     Row(vendor_id=1, vendor_name="Creative Mobile Technologies"),
+    #     Row(vendor_id=2, vendor_name="VeriFone Inc")
+    # ])
+    # payment_lookup = spark.createDataFrame([
+    #     Row(payment_type=1, payment_name="Credit card"),
+    #     Row(payment_type=2, payment_name="Cash"),
+    # ])
+    #
+    # filter_questions(df)
+    # groupby_questions(df)
+    # join_questions_safe(df, vendor_lookup, payment_lookup)
+    # join_and_window_questions_safe(df, vendor_lookup, payment_lookup)
 
     spark.stop()
