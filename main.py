@@ -136,7 +136,7 @@ if __name__ == "__main__":
         feature_cols=['passenger_count', 'total_amount', 'tolls_amount', 'tip_amount'],
         categorical_cols=['vendor_id', 'payment_type'],
         label_col='trip_category', # Використає вже існуючу колонку
-        save=False,
+        save=False
     )
     clf_gbt_results.show(truncate=False)
 
