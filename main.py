@@ -8,6 +8,8 @@ from src.linregression import train_and_evaluate_linear_regression
 from src.logregression import train_and_evaluate_logistic_regression
 from src.GBTRegressor import train_and_evaluate_gbt_regression 
 from src.GBTClassifier import train_and_evaluate_gbt_classification
+from src.RFRegressor import train_and_evaluate_rf_regression
+from src.RFClassifier import train_and_evaluate_rf_classification
 
 if __name__ == "__main__":
     spark = SparkSession.builder \
@@ -82,19 +84,30 @@ if __name__ == "__main__":
         feature_cols=['passenger_count', 'trip_distance'],
         categorical_cols=['vendor_id', 'payment_type'],
         label_col='total_amount',
-        save=False
+        save=False,
+        use_tvs=False
     )
     reg_results.show(truncate=False)
 
     gbt_results = train_and_evaluate_gbt_regression(
-        df_sample, 
+        df_sample,
         feature_cols=['passenger_count', 'trip_distance'],
         categorical_cols=['vendor_id', 'payment_type'],
         label_col='total_amount',
         save=False,
-        use_tvs=True 
+        use_tvs=False
     )
     gbt_results.show(truncate=False)
+
+    rf_reg_results = train_and_evaluate_rf_regression(
+        df_sample,
+        feature_cols=['passenger_count', 'trip_distance'],
+        categorical_cols=['vendor_id', 'payment_type'],
+        label_col='total_amount',
+        save=False,
+        use_tvs=False
+    )
+    rf_reg_results.show(truncate=False)
 
     # Класифікація
     print("\nМультикласова Класифікація: Категорія Поїздки")
@@ -126,6 +139,39 @@ if __name__ == "__main__":
         save=False
     )
     clf_gbt_results.show(truncate=False)
+
+    print("\n---> Random Forest Classifier:")
+    clf_rf_results = train_and_evaluate_rf_classification(
+        df_sample,
+        feature_cols=['passenger_count', 'total_amount', 'tolls_amount', 'tip_amount'],
+        categorical_cols=['vendor_id', 'payment_type'],
+        label_col='trip_category',
+        save=False
+    )
+    clf_rf_results.show(truncate=False)
+
+    # --- Збереження метрик та побудова графіків ---
+    # Регресія: збираємо доступні результати (перевіряємо, чи виконувались блоки)
+    reg_results_list = []
+    if 'reg_results' in locals():
+        reg_results_list.append(reg_results)
+    if 'gbt_results' in locals():
+        reg_results_list.append(gbt_results)
+    if 'rf_reg_results' in locals():
+        reg_results_list.append(rf_reg_results)
+    if reg_results_list:
+        save_regression_comparison(reg_results_list, output_dir="/app/output")
+
+    # Класифікація: збираємо доступні результати
+    cls_results_list = []
+    if 'clf_results' in locals():
+        cls_results_list.append(clf_results)
+    if 'clf_gbt_results' in locals():
+        cls_results_list.append(clf_gbt_results)
+    if 'clf_rf_results' in locals():
+        cls_results_list.append(clf_rf_results)
+    if cls_results_list:
+        save_classification_comparison(cls_results_list, output_dir="/app/output")
 
     # get_numeric_stats(df)
     #
