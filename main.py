@@ -76,15 +76,15 @@ if __name__ == "__main__":
     df_sample = df.sample(withReplacement=False, fraction=0.2, seed=42)
     print(f"\nВикористовується {df_sample.count()} рядків для класифікації (20% від усіх)")
 
-    # # Регресія (результати в терміналі, без збереження)
-    # reg_results = train_and_evaluate_linear_regression(
-    #     df,
-    #     feature_cols=['passenger_count', 'trip_distance'],
-    #     categorical_cols=['vendor_id', 'payment_type'],
-    #     label_col='total_amount',
-    #     save=False
-    # )
-    # reg_results.show(truncate=False)
+    # Регресія (результати в терміналі, без збереження)
+    reg_results = train_and_evaluate_linear_regression(
+        df,
+        feature_cols=['passenger_count', 'trip_distance'],
+        categorical_cols=['vendor_id', 'payment_type'],
+        label_col='total_amount',
+        save=False
+    )
+    reg_results.show(truncate=False)
 
     gbt_results = train_and_evaluate_gbt_regression(
         df_sample, 
@@ -100,22 +100,22 @@ if __name__ == "__main__":
     print("\nМультикласова Класифікація: Категорія Поїздки")
     # Класи: 0 (Short), 1 (Medium), 2 (Long)
 
-    # clf_results = train_and_evaluate_logistic_regression(
-    #     df_sample,
-    #     feature_cols=[
-    #         'passenger_count',
-    #         'total_amount',  # Ціна сильно корелює з відстанню
-    #         'tolls_amount',  # Платні дороги часто означають довгу поїздку
-    #         'tip_amount'
-    #     ],
-    #     categorical_cols=[
-    #         'vendor_id',
-    #         'payment_type'
-    #     ],
-    #     label_col='trip_category',  # Назва нової колонки з класами
-    #     save=False
-    # )
-    # clf_results.show(truncate=False)
+    clf_results = train_and_evaluate_logistic_regression(
+        df_sample,
+        feature_cols=[
+            'passenger_count',
+            'total_amount',  # Ціна сильно корелює з відстанню
+            'tolls_amount',  # Платні дороги часто означають довгу поїздку
+            'tip_amount'
+        ],
+        categorical_cols=[
+            'vendor_id',
+            'payment_type'
+        ],
+        label_col='trip_category',  # Назва нової колонки з класами
+        save=False
+    )
+    clf_results.show(truncate=False)
 
     print("\n---> GBT Classifier:")
     clf_gbt_results = train_and_evaluate_gbt_classification(
