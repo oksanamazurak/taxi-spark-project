@@ -6,6 +6,8 @@ from pyspark.sql import Row
 import sys
 from src.linregression import train_and_evaluate_linear_regression
 from src.logregression import train_and_evaluate_logistic_regression
+from src.GBTRegressor import train_and_evaluate_gbt_regression 
+from src.GBTClassifier import train_and_evaluate_gbt_classification
 
 if __name__ == "__main__":
     spark = SparkSession.builder \
@@ -84,6 +86,16 @@ if __name__ == "__main__":
     )
     reg_results.show(truncate=False)
 
+    gbt_results = train_and_evaluate_gbt_regression(
+        df_sample, 
+        feature_cols=['passenger_count', 'trip_distance'],
+        categorical_cols=['vendor_id', 'payment_type'],
+        label_col='total_amount',
+        save=False,
+        use_tvs=True 
+    )
+    gbt_results.show(truncate=False)
+
     # Класифікація
     print("\nМультикласова Класифікація: Категорія Поїздки")
     # Класи: 0 (Short), 1 (Medium), 2 (Long)
@@ -104,6 +116,16 @@ if __name__ == "__main__":
         save=False
     )
     clf_results.show(truncate=False)
+
+    print("\n---> GBT Classifier:")
+    clf_gbt_results = train_and_evaluate_gbt_classification(
+        df_sample,
+        feature_cols=['passenger_count', 'total_amount', 'tolls_amount', 'tip_amount'],
+        categorical_cols=['vendor_id', 'payment_type'],
+        label_col='trip_category', # Використає вже існуючу колонку
+        save=False
+    )
+    clf_gbt_results.show(truncate=False)
 
     # get_numeric_stats(df)
     #
