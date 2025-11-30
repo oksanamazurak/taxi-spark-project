@@ -10,7 +10,6 @@ from src.GBTRegressor import train_and_evaluate_gbt_regression
 from src.GBTClassifier import train_and_evaluate_gbt_classification
 from src.RFRegressor import train_and_evaluate_rf_regression
 from src.RFClassifier import train_and_evaluate_rf_classification
-from src.evaluation import save_classification_comparison, save_regression_comparison
 
 if __name__ == "__main__":
     spark = SparkSession.builder \
